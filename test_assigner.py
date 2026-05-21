@@ -11,6 +11,8 @@ config.LARK_APP_SECRET = "test_app_secret"
 config.LARK_BASE_TOKEN = "test_base_token"
 config.TABLE_TIKTOK_ID = "test_tiktok_table"
 config.TABLE_TVV_ID = "test_tvv_table"
+config.MAX_ASSIGNMENTS_PER_DAY = 2
+config.COOLDOWN_MINUTES_BETWEEN_CALLS = 30
 
 from assigner import (
     check_tvv_availability,
@@ -175,14 +177,15 @@ class TestLeadAssignment(unittest.TestCase):
         self.assertEqual(selected["user_id"], "user_n2")  # Should pick user_n2 because they have 0 assignments
         
     def test_assign_m0_lead_to_tvv_scenario_3_overflow_to_other_region(self):
-        """Scenario 3: North TVVs have both reached the daily limit (2 assignments). Should overflow to South TVV."""
+        """Scenario 3: North TVVs are busy (cooldown conflict). Should overflow to South TVV."""
+        start_ms, _ = get_today_range()
         lead_id = "lead_003"
         lead_record = {
             "record_id": lead_id,
             "fields": {
                 config.FIELD_TIKTOK_STATUS: "M0",
                 config.FIELD_TIKTOK_REGION: "Miền Bắc",
-                config.FIELD_TIKTOK_CALLBACK_TIME: 1716200000000
+                config.FIELD_TIKTOK_CALLBACK_TIME: start_ms + 10000
             }
         }
         self.client.get_record.return_value = lead_record
@@ -208,23 +211,14 @@ class TestLeadAssignment(unittest.TestCase):
             }
         ]
         
-        # Mock today's assignments: North 1 (user_n1) already has 2 assignments today
-        start_ms, _ = get_today_range()
+        # Mock today's assignments: North 1 (user_n1) has a conflicting callback at the target time
         today_assignments_records = [
             {
                 "record_id": "l1",
                 "fields": {
                     config.FIELD_TIKTOK_ASSIGNED_USER: [{"id": "user_n1"}],
-                    config.FIELD_TIKTOK_ASSIGNED_TIME: start_ms + 1000,
+                    config.FIELD_TIKTOK_ASSIGNED_TIME: start_ms + 5000,
                     config.FIELD_TIKTOK_CALLBACK_TIME: start_ms + 10000
-                }
-            },
-            {
-                "record_id": "l2",
-                "fields": {
-                    config.FIELD_TIKTOK_ASSIGNED_USER: [{"id": "user_n1"}],
-                    config.FIELD_TIKTOK_ASSIGNED_TIME: start_ms + 2000,
-                    config.FIELD_TIKTOK_CALLBACK_TIME: start_ms + 20000
                 }
             }
         ]
@@ -246,54 +240,190 @@ class TestLeadAssignment(unittest.TestCase):
         self.assertEqual(selected["user_id"], "user_s1")  # Should overflow to South TVV (user_s1)
 
     def test_assign_t0_leads_to_tts(self):
-        """Test daily 8 AM T0 lead distribution to active TTS."""
+        """Test that daily T0 lead distribution to active TTS is disabled and returns 0."""
+        # Act
+        assigned_count = assign_t0_leads_to_tts(self.client)
+        
+        # Assert
+        self.assertEqual(assigned_count, 0)
+        self.client.batch_update_records.assert_not_called()
+
+    def test_assign_m0_lead_with_none_callback_time(self):
+        """If a lead has no callback time, assign it to a TVV and write back the resolved time."""
+        lead_id = "lead_none"
+        lead_record = {
+            "record_id": lead_id,
+            "fields": {
+                config.FIELD_TIKTOK_STATUS: "M0",
+                config.FIELD_TIKTOK_REGION: "Miền Bắc",
+                config.FIELD_TIKTOK_CALLBACK_TIME: None
+            }
+        }
+        self.client.get_record.return_value = lead_record
+        
         tvvs_records = [
             {
-                "record_id": "rec_tts_1",
+                "record_id": "rec_tvv_1",
                 "fields": {
-                    config.FIELD_TVV_ROLE: "TTS",
+                    config.FIELD_TVV_ROLE: "TVV",
                     config.FIELD_TVV_ACTIVE: True,
-                    config.FIELD_TVV_USER: [{"id": "tts_1", "name": "TTS 1"}]
+                    config.FIELD_TVV_REGION: "Miền Bắc",
+                    config.FIELD_TVV_USER: [{"id": "user_north", "name": "TVV North"}]
                 }
-            },
+            }
+        ]
+        self.client.list_records.side_effect = lambda table_id: tvvs_records if table_id == config.TABLE_TVV_ID else []
+        
+        # Act
+        selected = assign_m0_lead_to_tvv(self.client, lead_id)
+        
+        # Assert
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["user_id"], "user_north")
+        
+        # Check update_record was called with the callback time populated
+        self.client.update_record.assert_called_once()
+        args = self.client.update_record.call_args[0]
+        update_fields = args[2]
+        self.assertIsNotNone(update_fields.get(config.FIELD_TIKTOK_CALLBACK_TIME))
+
+    def test_assign_m0_lead_with_collision_shifts_time(self):
+        """If a TVV has a conflict, select the TVV and shift callback time to next free slot."""
+        lead_id = "lead_clash"
+        target_time = 1716200000000 # 2026-05-20 approx.
+        lead_record = {
+            "record_id": lead_id,
+            "fields": {
+                config.FIELD_TIKTOK_STATUS: "M0",
+                config.FIELD_TIKTOK_REGION: "Miền Bắc",
+                config.FIELD_TIKTOK_CALLBACK_TIME: target_time
+            }
+        }
+        self.client.get_record.return_value = lead_record
+        
+        tvvs_records = [
             {
-                "record_id": "rec_tts_2",
+                "record_id": "rec_tvv_1",
                 "fields": {
-                    config.FIELD_TVV_ROLE: "TTS",
+                    config.FIELD_TVV_ROLE: "TVV",
                     config.FIELD_TVV_ACTIVE: True,
-                    config.FIELD_TVV_USER: [{"id": "tts_2", "name": "TTS 2"}]
+                    config.FIELD_TVV_REGION: "Miền Bắc",
+                    config.FIELD_TVV_USER: [{"id": "user_north", "name": "TVV North"}]
                 }
             }
         ]
         
-        t0_leads = [
-            {"record_id": "lead_t0_1", "fields": {config.FIELD_TIKTOK_STATUS: "T0"}},
-            {"record_id": "lead_t0_2", "fields": {config.FIELD_TIKTOK_STATUS: "T0"}},
-            {"record_id": "lead_t0_3", "fields": {config.FIELD_TIKTOK_STATUS: "T0"}}
+        # Mock today's assignments: TVV North has a call at target_time and target_time + 30 mins (cooldown)
+        # So next free slot should be target_time + 60 mins
+        cooldown_ms = config.COOLDOWN_MINUTES_BETWEEN_CALLS * 60 * 1000
+        today_assignments_records = [
+            {
+                "record_id": "prev_l1",
+                "fields": {
+                    config.FIELD_TIKTOK_ASSIGNED_USER: [{"id": "user_north"}],
+                    config.FIELD_TIKTOK_ASSIGNED_TIME: int(time.time() * 1000),
+                    config.FIELD_TIKTOK_CALLBACK_TIME: target_time
+                }
+            },
+            {
+                "record_id": "prev_l2",
+                "fields": {
+                    config.FIELD_TIKTOK_ASSIGNED_USER: [{"id": "user_north"}],
+                    config.FIELD_TIKTOK_ASSIGNED_TIME: int(time.time() * 1000),
+                    config.FIELD_TIKTOK_CALLBACK_TIME: target_time + cooldown_ms
+                }
+            }
         ]
         
         def mock_list_records(table_id):
             if table_id == config.TABLE_TVV_ID:
                 return tvvs_records
             elif table_id == config.TABLE_TIKTOK_ID:
-                return t0_leads
+                return today_assignments_records
             return []
             
         self.client.list_records.side_effect = mock_list_records
         
         # Act
-        assigned_count = assign_t0_leads_to_tts(self.client)
+        selected = assign_m0_lead_to_tvv(self.client, lead_id)
         
         # Assert
-        self.assertEqual(assigned_count, 3)
-        self.client.batch_update_records.assert_called_once()
-        updates = self.client.batch_update_records.call_args[0][1]
-        self.assertEqual(len(updates), 3)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["user_id"], "user_north")
         
-        # Check distribution (TTS 1 -> tts_1, TTS 2 -> tts_2, TTS 1 -> tts_1 due to round robin)
-        self.assertEqual(updates[0]["fields"][config.FIELD_TIKTOK_ASSIGNED_USER][0]["id"], "tts_1")
-        self.assertEqual(updates[1]["fields"][config.FIELD_TIKTOK_ASSIGNED_USER][0]["id"], "tts_2")
-        self.assertEqual(updates[2]["fields"][config.FIELD_TIKTOK_ASSIGNED_USER][0]["id"], "tts_1")
+        # Check update_record was called with the callback time shifted to target_time + 2*cooldown
+        self.client.update_record.assert_called_once()
+        args = self.client.update_record.call_args[0]
+        update_fields = args[2]
+        self.assertEqual(update_fields.get(config.FIELD_TIKTOK_CALLBACK_TIME), target_time + 2 * cooldown_ms)
+
+    def test_normalize_region(self):
+        from assigner import normalize_region
+        self.assertEqual(normalize_region("Hà Nội"), "Miền Bắc")
+        self.assertEqual(normalize_region("HCM"), "Miền Nam")
+        self.assertEqual(normalize_region("hồ chí minh"), "Miền Nam")
+        self.assertEqual(normalize_region("HN"), "Miền Bắc")
+        self.assertEqual(normalize_region("Miền Nam"), "Miền Nam")
+        self.assertEqual(normalize_region(""), "")
+        self.assertEqual(normalize_region(None), "")
+
+    def test_dynamic_column_detection_and_assignment(self):
+        """
+        Verify that fetch_active_agents automatically detects today's date column,
+        personnel column named "Nhân sự", and region column named "Team TV".
+        """
+        from assigner import fetch_active_agents, tz_vietnam
+        # Let's mock a TVV record with sheet style columns
+        now_vn = datetime.now(tz_vietnam)
+        today_col = now_vn.strftime("%d/%m")
+        
+        tvvs_records = [
+            {
+                "record_id": "rec_tvv_dynamic",
+                "fields": {
+                    "Nhân sự": [{"id": "user_dyn", "name": "Dynamic User"}],
+                    "Team TV": "Hà Nội",
+                    "Hình thức": "Chính thức",
+                    today_col: True
+                }
+            }
+        ]
+        self.client.list_records.return_value = tvvs_records
+        
+        active = fetch_active_agents(self.client, "TVV")
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0]["user_id"], "user_dyn")
+        self.assertEqual(active[0]["name"], "Dynamic User")
+        self.assertEqual(active[0]["region"], "Miền Bắc") # "Hà Nội" normalized
+
+    def test_robust_dynamic_column_detection(self):
+        """
+        Verify dynamic column detection behaves correctly with complex date formats,
+        various column names (Họ và tên, Chi nhánh, Loại), and extra spaces.
+        """
+        from assigner import fetch_active_agents, tz_vietnam
+        now_vn = datetime.now(tz_vietnam)
+        # Match e.g., "21/5/2026"
+        today_col = f"{now_vn.day}/{now_vn.month}/{now_vn.year}"
+        
+        tvvs_records = [
+            {
+                "record_id": "rec_tvv_robust",
+                "fields": {
+                    " Họ và tên  ": [{"id": "user_robust", "name": "Robust User"}],
+                    " Chi nhánh  ": "HCM",
+                    " Loại ": "TVV",
+                    today_col: True
+                }
+            }
+        ]
+        self.client.list_records.return_value = tvvs_records
+        
+        active = fetch_active_agents(self.client, "TVV")
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0]["user_id"], "user_robust")
+        self.assertEqual(active[0]["name"], "Robust User")
+        self.assertEqual(active[0]["region"], "Miền Nam") # "HCM" normalized
 
 if __name__ == "__main__":
     unittest.main()

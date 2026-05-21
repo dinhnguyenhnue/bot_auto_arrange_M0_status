@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lark Lead Assigner - Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-primary: #6366f1; /* Indigo */
+            --accent-primary-hover: #4f46e5;
+            --accent-success: #10b981; /* Emerald */
+            --accent-danger: #ef4444; /* Red */
+            --font-family: 'Outfit', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 3fr 2fr;
+            }
+            .header-panel {
+                grid-column: span 2;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .header-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .title-group h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .title-group p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+        }
+
+        .status-dot.healthy {
+            background: var(--accent-success);
+            box-shadow: 0 0 10px var(--accent-success);
+        }
+
+        .status-dot.unhealthy {
+            background: var(--accent-danger);
+            box-shadow: 0 0 10px var(--accent-danger);
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            border-left: 3px solid var(--accent-primary);
+            padding-left: 0.75rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        input[type="text"], input[type="password"], input[type="number"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        button {
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-primary-hover);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border: 1px solid var(--card-border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Log Terminal panel */
+        .terminal {
+            background: #05070c;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            height: 350px;
+            overflow-y: auto;
+            color: #34d399; /* Green text */
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .terminal-line {
+            line-height: 1.4;
+            white-space: pre-wrap;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            padding-bottom: 0.25rem;
+        }
+
+        .terminal-line.error {
+            color: var(--accent-danger);
+        }
+
+        .terminal-line.warn {
+            color: #fbbf24;
+        }
+
+        .terminal-line.info {
+            color: #38bdf8;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #1f2937;
+            border: 1px solid var(--accent-success);
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transform: translateY(150%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+        }
+
+        .toast.error {
+            border-color: var(--accent-danger);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="card header-panel">
+            <div class="title-group">
+                <h1>Lark Lead Distributor</h1>
+                <p>Real-Time Auto M0 lead router & conflict resolution system</p>
+            </div>
+            <div class="status-badge">
+                <div id="statusDot" class="status-dot"></div>
+                <span id="statusText">Checking connection...</span>
+            </div>
+        </div>
+
+        <!-- Configurations -->
+        <div class="card">
+            <h2>System Configuration</h2>
+            <form id="configForm" onsubmit="saveConfig(event)">
+                <div class="form-group">
+                    <label for="LARK_APP_ID">App ID</label>
+                    <input type="text" id="LARK_APP_ID" required placeholder="cli_...">
+                </div>
+                <div class="form-group">
+                    <label for="LARK_APP_SECRET">App Secret</label>
+                    <input type="password" id="LARK_APP_SECRET" required placeholder="••••••••••••••••••••••••">
+                </div>
+                <div class="form-group">
+                    <label for="LINK_TABLE_TIKTOK">Link bảng có data Tiktok</label>
+                    <input type="text" id="LINK_TABLE_TIKTOK" required placeholder="https://open.larksuite.com/base/...">
+                </div>
+                <div class="form-group">
+                    <label for="LINK_TABLE_TVV">Link bảng làm việc của tư vấn viên</label>
+                    <input type="text" id="LINK_TABLE_TVV" required placeholder="https://open.larksuite.com/base/...">
+                </div>
+                <div class="form-group">
+                    <label for="COOLDOWN_MINUTES_BETWEEN_CALLS">Các cuộc gọi cách nhau (phút)</label>
+                    <input type="number" id="COOLDOWN_MINUTES_BETWEEN_CALLS" required min="5" max="1440" value="30">
+                </div>
+                <button type="submit" class="btn-primary" style="margin-top: 0.5rem; width: 100%;">Save Configuration</button>
+            </form>
+        </div>
+
+        <!-- Real-time Status / Actions -->
+        <div class="card" style="justify-content: flex-start;">
+            <h2>Operations & Real-Time Logs</h2>
+            
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn-secondary" onclick="checkHealth()" style="flex: 1;">Check Connection</button>
+                <button class="btn-primary" onclick="triggerSync()" style="flex: 1;">Sync M0 Now</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                <label>Recent System Actions</label>
+                <div id="terminal" class="terminal">
+                    <div class="terminal-line info">Dashboard loaded. Waiting for status check...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <span id="toastMsg">Config saved successfully!</span>
+    </div>
+
+    <script>
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const terminal = document.getElementById('terminal');
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+
+        function showToast(msg, isError = false) {
+            toastMsg.innerText = msg;
+            if (isError) {
+                toast.classList.add('error');
+            } else {
+                toast.classList.remove('error');
+            }
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function appendLog(msg, level = 'info') {
+            const line = document.createElement('div');
+            line.className = `terminal-line ${level}`;
+            const timeStr = new Date().toLocaleTimeString();
+            line.innerText = `[${timeStr}] ${msg}`;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        async function fetchConfig() {
+            try {
+                const res = await fetch('/api/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    for (const key in data) {
+                        const input = document.getElementById(key);
+                        if (input) input.value = data[key];
+                    }
+                    appendLog('Loaded existing configuration.');
+                }
+            } catch (err) {
+                appendLog('Failed to fetch configuration.', 'error');
+            }
+        }
+
+        async function saveConfig(e) {
+            e.preventDefault();
+            const config = {};
+            const keys = [
+                'LARK_APP_ID', 'LARK_APP_SECRET', 'LINK_TABLE_TIKTOK', 'LINK_TABLE_TVV',
+                'COOLDOWN_MINUTES_BETWEEN_CALLS'
+            ];
+            keys.forEach(k => {
+                config[k] = document.getElementById(k).value;
+            });
+
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                if (res.ok) {
+                    showToast('Configuration saved and reloaded!');
+                    appendLog('Configuration updated successfully.');
+                    checkHealth();
+                } else {
+                    const errData = await res.json();
+                    showToast(errData.detail || 'Failed to save configuration.', true);
+                    appendLog(`Configuration update failed: ${errData.detail}`, 'error');
+                }
+            } catch (err) {
+                showToast('Network error while saving config.', true);
+                appendLog(`Network error during config update: ${err}`, 'error');
+            }
+        }
+
+        async function checkHealth() {
+            statusDot.className = 'status-dot';
+            statusText.innerText = 'Checking Lark connectivity...';
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+                if (data.status === 'healthy') {
+                    statusDot.className = 'status-dot healthy';
+                    statusText.innerText = 'Lark: Connected';
+                    appendLog('Lark connection status: HEALTHY (Token fetch success).', 'info');
+                } else {
+                    statusDot.className = 'status-dot unhealthy';
+                    statusText.innerText = 'Lark: Disconnected';
+                    appendLog(`Lark connection status: UNHEALTHY. Error: ${data.error}`, 'error');
+                }
+            } catch (err) {
+                statusDot.className = 'status-dot unhealthy';
+                statusText.innerText = 'Server offline';
+                appendLog('FastAPI Server is unreachable.', 'error');
+            }
+        }
+
+        async function triggerSync() {
+            appendLog('Triggering manual M0 synchronization scan...', 'info');
+            try {
+                const res = await fetch('/api/sync', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('Sync process completed!');
+                    appendLog(`Sync success: ${data.message}`);
+                } else {
+                    showToast(data.detail || 'Sync failed.', true);
+                    appendLog(`Sync failed: ${data.detail}`, 'error');
+                }
+            } catch (err) {
+                showToast('Network error during sync.', true);
+                appendLog(`Sync failed due to network error: ${err}`, 'error');
+            }
+        }
+
+        // Fetch logs periodically
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                if (res.ok) {
+                    const logs = await res.json();
+                    terminal.innerHTML = '';
+                    logs.forEach(log => {
+                        const line = document.createElement('div');
+                        let level = 'info';
+                        if (log.includes('[ERROR]')) level = 'error';
+                        else if (log.includes('[WARNING]')) level = 'warn';
+                        line.className = `terminal-line ${level}`;
+                        line.innerText = log;
+                        terminal.appendChild(line);
+                    });
+                    terminal.scrollTop = terminal.scrollHeight;
+                }
+            } catch (err) {
+                // Ignore background polling errors
+            }
+        }
+
+        // Initialize dashboard
+        fetchConfig().then(() => checkHealth());
+        setInterval(checkHealth, 30000); // Check health every 30s
+        setInterval(fetchLogs, 4000);    // Poll logs every 4 seconds
+    </script>
+</body>
+</html>

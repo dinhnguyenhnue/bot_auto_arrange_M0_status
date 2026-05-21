@@ -10,11 +10,22 @@ logger = logging.getLogger(__name__)
 
 class LarkClient:
     def __init__(self):
-        self.app_id = config.LARK_APP_ID
-        self.app_secret = config.LARK_APP_SECRET
-        self.base_token = config.LARK_BASE_TOKEN
         self._token: Optional[str] = None
         self._token_expires_at: float = 0.0
+
+    @property
+    def app_id(self) -> str:
+        return config.LARK_APP_ID
+
+    @property
+    def app_secret(self) -> str:
+        return config.LARK_APP_SECRET
+
+    def _get_base_token(self, table_id: str) -> str:
+        # If separate base token exists for TVV table, use it. Otherwise fall back to LARK_BASE_TOKEN.
+        if table_id == config.TABLE_TVV_ID and config.LARK_BASE_TOKEN_TVV:
+            return config.LARK_BASE_TOKEN_TVV
+        return config.LARK_BASE_TOKEN
 
     def get_token(self) -> str:
         """Get the cached tenant_access_token or request a new one if expired."""
@@ -65,7 +76,8 @@ class LarkClient:
         :param filter_json: Optional filter JSON body for the API
         :return: List of record dictionaries (containing record_id and fields)
         """
-        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{self.base_token}/tables/{table_id}/records"
+        base_token = self._get_base_token(table_id)
+        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/records"
         records = []
         page_token = None
         has_more = True
@@ -107,7 +119,8 @@ class LarkClient:
         """
         Fetch a single record by its ID.
         """
-        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{self.base_token}/tables/{table_id}/records/{record_id}"
+        base_token = self._get_base_token(table_id)
+        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/records/{record_id}"
         headers = self.get_headers()
         try:
             logger.info(f"Fetching record {record_id} from table {table_id}...")
@@ -126,7 +139,8 @@ class LarkClient:
         """
         Update fields of a single record.
         """
-        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{self.base_token}/tables/{table_id}/records/{record_id}"
+        base_token = self._get_base_token(table_id)
+        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/records/{record_id}"
         payload = {"fields": fields}
         headers = self.get_headers()
         
@@ -155,7 +169,8 @@ class LarkClient:
         if not records:
             return {}
             
-        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{self.base_token}/tables/{table_id}/records/batch_update"
+        base_token = self._get_base_token(table_id)
+        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/records/batch_update"
         headers = self.get_headers()
         
         # Split into chunks of 500 records
