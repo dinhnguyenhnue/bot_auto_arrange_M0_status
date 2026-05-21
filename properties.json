@@ -1,0 +1,13 @@
+{
+    "field_id": "fldtw32dPX",
+    "field_name": "Tư vấn viên",
+    "is_extend": false,
+    "is_primary": false,
+    "is_synced": false,
+    "property": {
+        "multiple": false,
+        "table_id": ""
+    },
+    "type": 18,
+    "ui_type": "SingleLink"
+}
