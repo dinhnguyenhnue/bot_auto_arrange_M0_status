@@ -90,18 +90,21 @@ def run_m0_sync_process():
     try:
         config.validate_config()
         
-        # Utilize server-side formula filtering to query ONLY unassigned M0 records.
-        filter_formula = f'AND(CurrentValue.[{config.FIELD_TIKTOK_STATUS}]="{config.VALUE_TIKTOK_STATUS_M0}", CurrentValue.[{config.FIELD_TIKTOK_ASSIGNED_USER}]="")'
+        # Server-side filter: only filter by M0 status.
+        # Note: checking Person field emptiness (CurrentValue.[field]="") does NOT work
+        # reliably in Lark Bitable formulas, so we only filter by status server-side
+        # and check "Người nhận data" emptiness client-side.
+        filter_formula = f'CurrentValue.[{config.FIELD_TIKTOK_STATUS}]="{config.VALUE_TIKTOK_STATUS_M0}"'
         records = lark_client.list_records(config.TABLE_TIKTOK_ID, filter_formula=filter_formula)
         
-        # Additional validation pass to filter any records that don't match (for safety)
+        # Client-side validation: find M0 leads where "Người nhận data" is empty
         unassigned_records = []
         for rec in records:
             fields = rec.get("fields", {})
             status = fields.get(config.FIELD_TIKTOK_STATUS)
             if status == config.VALUE_TIKTOK_STATUS_M0:
-                assigned_user = fields.get(config.FIELD_TIKTOK_ASSIGNED_USER)
-                if not assigned_user or len(assigned_user) == 0:
+                recipient_user = fields.get(config.FIELD_TIKTOK_RECIPIENT_USER)
+                if not recipient_user or (isinstance(recipient_user, list) and len(recipient_user) == 0):
                     unassigned_records.append(rec)
                     
         unassigned_m0_count = 0

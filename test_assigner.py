@@ -18,6 +18,7 @@ from assigner import (
     check_tvv_availability,
     assign_m0_lead_to_tvv,
     assign_t0_leads_to_tts,
+    build_assignment_update_fields,
     get_today_range,
     tz_vietnam
 )
@@ -28,6 +29,8 @@ class TestLeadAssignment(unittest.TestCase):
     def setUp(self):
         # Create a mock Lark client
         self.client = MagicMock(spec=LarkClient)
+        # Default: field type is Person (11) for backward compatibility
+        self.client.get_field_type.return_value = 11
         
     def test_today_range(self):
         start, end = get_today_range()
@@ -346,6 +349,32 @@ class TestLeadAssignment(unittest.TestCase):
         args = self.client.update_record.call_args[0]
         update_fields = args[2]
         self.assertNotIn(config.FIELD_TIKTOK_CALLBACK_TIME, update_fields)
+
+    def test_build_assignment_update_fields_person_type(self):
+        """When 'Tư vấn viên' is Person (type 11), both fields should be filled."""
+        self.client.get_field_type.return_value = 11  # Person
+        result = build_assignment_update_fields(self.client, "ou_abc", 1000)
+        self.assertEqual(result[config.FIELD_TIKTOK_ASSIGNED_USER], [{"id": "ou_abc"}])
+        self.assertEqual(result[config.FIELD_TIKTOK_RECIPIENT_USER], [{"id": "ou_abc"}])
+        self.assertEqual(result[config.FIELD_TIKTOK_ASSIGNED_TIME], 1000)
+
+    def test_build_assignment_update_fields_link_type_skipped(self):
+        """When 'Tư vấn viên' is Link (type 18), it should be SKIPPED. Only 'Người nhận data' is filled."""
+        self.client.get_field_type.return_value = 18  # Link
+        result = build_assignment_update_fields(self.client, "ou_abc", 1000)
+        # 'Tư vấn viên' should NOT be in update_fields
+        self.assertNotIn(config.FIELD_TIKTOK_ASSIGNED_USER, result)
+        # 'Người nhận data' should still be filled
+        self.assertEqual(result[config.FIELD_TIKTOK_RECIPIENT_USER], [{"id": "ou_abc"}])
+        self.assertEqual(result[config.FIELD_TIKTOK_ASSIGNED_TIME], 1000)
+
+    def test_build_assignment_update_fields_none_type_fallback(self):
+        """When field type detection fails (returns None), fall back to Person format."""
+        self.client.get_field_type.return_value = None
+        result = build_assignment_update_fields(self.client, "ou_abc", 1000)
+        # Should fall back to Person format
+        self.assertEqual(result[config.FIELD_TIKTOK_ASSIGNED_USER], [{"id": "ou_abc"}])
+        self.assertEqual(result[config.FIELD_TIKTOK_RECIPIENT_USER], [{"id": "ou_abc"}])
 
     def test_normalize_region(self):
         from assigner import normalize_region

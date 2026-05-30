@@ -12,6 +12,9 @@ class LarkClient:
     def __init__(self):
         self._token: Optional[str] = None
         self._token_expires_at: float = 0.0
+        self._user_map_cache: Optional[Dict[str, str]] = None
+        self._user_map_cache_expires_at: float = 0.0
+        self._fields_cache: Dict[str, tuple] = {}  # table_id -> (expires_at, fields_list)
 
     @property
     def app_id(self) -> str:
@@ -273,10 +276,76 @@ class LarkClient:
         logger.info(f"Successfully batch deleted {len(record_ids)} records.")
         return {"code": 0, "msg": "success"}
 
-    def fetch_all_users(self) -> Dict[str, str]:
+    def list_fields(self, table_id: str) -> List[Dict[str, Any]]:
+        """
+        List all fields/columns of a Bitable table with caching (1 hour).
+        Returns list of field dicts with keys: field_name, type, property, is_primary, etc.
+        """
+        current_time = time.time()
+        cache_key = table_id
+        if cache_key in self._fields_cache:
+            expires_at, cached_fields = self._fields_cache[cache_key]
+            if current_time < expires_at:
+                return cached_fields
+
+        base_token = self._get_base_token(table_id)
+        url = f"https://open.larksuite.com/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/fields"
+        headers = self.get_headers()
+        fields = []
+        page_token = None
+        has_more = True
+
+        while has_more:
+            params = {"page_size": 100}
+            if page_token:
+                params["page_token"] = page_token
+
+            try:
+                response = requests.get(url, headers=headers, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get("code") == 0:
+                    page_data = data.get("data", {})
+                    items = page_data.get("items", [])
+                    fields.extend(items)
+                    has_more = page_data.get("has_more", False)
+                    page_token = page_data.get("page_token")
+                else:
+                    logger.warning(f"Failed to list fields for table {table_id}: {data.get('msg')} (code: {data.get('code')})")
+                    break
+            except Exception as e:
+                logger.warning(f"Error listing fields for table {table_id}: {e}")
+                break
+
+        # Cache for 1 hour
+        self._fields_cache[cache_key] = (current_time + 3600, fields)
+        logger.info(f"Cached {len(fields)} field definitions for table {table_id}.")
+        return fields
+
+    def get_field_type(self, table_id: str, field_name: str) -> Optional[int]:
+        """
+        Get the Lark field type code for a specific field by name.
+        Returns None if field not found or API error.
+        Common types: 1=Text, 5=DateTime, 11=Person/User, 18=Link, 20=Formula.
+        """
+        try:
+            fields = self.list_fields(table_id)
+            for f in fields:
+                if f.get("field_name") == field_name:
+                    return f.get("type")
+        except Exception as e:
+            logger.warning(f"Could not detect field type for '{field_name}' in table {table_id}: {e}")
+        return None
+
+    def fetch_all_users(self, force_refresh: bool = False) -> Dict[str, str]:
         """
         Fetch all users within the app's contact scope and return a mapping of name -> open_id.
         """
+        current_time = time.time()
+        if not force_refresh and self._user_map_cache is not None and current_time < self._user_map_cache_expires_at:
+            return self._user_map_cache
+
         url = "https://open.larksuite.com/open-apis/contact/v3/users"
         user_map = {}
         page_token = None
@@ -313,5 +382,7 @@ class LarkClient:
                 logger.error(f"Error listing users: {e}")
                 break
                 
+        self._user_map_cache = user_map
+        self._user_map_cache_expires_at = current_time + 3600  # Cache for 1 hour
         return user_map
 
