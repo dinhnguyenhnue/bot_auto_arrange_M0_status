@@ -1,84 +1,141 @@
 ========================================================================
              HƯỚNG DẪN SỬ DỤNG - BOT PHÂN PHỐI LEAD M0 TỰ ĐỘNG
+                         Phiên bản 2.0 (06/2026)
 ========================================================================
 
-Bot phân phối lead tự động hỗ trợ tự động tìm kiếm các lead ở trạng thái M0
+Bot phân phối lead tự động hỗ trợ tìm kiếm các lead ở trạng thái M0
 trên Lark Bitable (CRM) và gán đều cho các tư vấn viên (TVV) đang đi làm
 hôm nay dựa trên khu vực hoạt động và khoảng cách thời gian hẹn gọi lại.
+
+Bot hoạt động với 2 bảng:
+  - Bảng CRM (data TikTok): Chứa danh sách lead cần phân phối.
+  - Bảng Điều phối data: Cấu hình sẵn TVV với 2 cột "Tư vấn viên" (Link)
+    và "Người nhận data" (Person) nối thẳng sang bảng CRM.
+
+========================================================================
+ CẤU TRÚC THƯ MỤC
+========================================================================
+  main.exe        - File chạy chính (khởi động bot)
+  .env            - File cấu hình (tự tạo khi lưu lần đầu)
+  env.example     - File cấu hình mẫu
+  HDSD.txt        - Hướng dẫn sử dụng (file này)
+  Dashboard.url   - Shortcut mở Dashboard trên trình duyệt
 
 ------------------------------------------------------------------------
 1. HƯỚNG DẪN CÀI ĐẶT & CHẠY BOT
 ------------------------------------------------------------------------
 B1. Khởi chạy file:
-    - Chạy trực tiếp file `main.exe`. Một cửa sổ dòng lệnh (Terminal) sẽ mở ra
-      và khởi động web server ở cổng 8000.
+    - Chạy trực tiếp file `main.exe`. Một cửa sổ dòng lệnh (Terminal) sẽ
+      mở ra và khởi động web server ở cổng 8000.
       *Lưu ý: Không tắt cửa sổ Terminal này khi bot đang chạy.*
+    - Dashboard sẽ tự động mở trên trình duyệt mặc định.
 
 B2. Truy cập Giao diện Điều khiển (Web Dashboard):
-    - Mở trình duyệt web bất kỳ (Chrome, Edge, Firefox...) và truy cập địa chỉ:
+    - Nếu Dashboard không tự mở, truy cập thủ công tại:
       http://localhost:8000
 
 B3. Điền thông tin cấu hình cơ bản:
     - App ID: Mã Lark App ID của bạn (ví dụ: cli_...).
     - App Secret: Mã Lark App Secret đi kèm.
-    - Link bảng có data Tiktok: Link đầy đủ đến bảng chứa lead cần chia trên Lark.
-    - Link bảng làm việc của tư vấn viên: Link đầy đủ đến bảng chấm công/đi làm của TVV.
-    - Các cuộc gọi cách nhau (phút): Thời gian giãn cách tối thiểu giữa 2 lead được chia
-      cho cùng một TVV để tránh bị chồng chéo giờ hẹn gọi lại (mặc định: 30 phút).
-    - Tần suất quét dữ liệu (giây): Chu kỳ bot tự động quét và chia data (mặc định: 60 giây).
+    - Link bảng CRM (data TikTok): Link đầy đủ đến bảng chứa lead cần
+      phân phối trên Lark Bitable.
+    - Link bảng Điều phối data: Link đầy đủ đến bảng điều phối đã cấu hình
+      sẵn danh sách TVV với 2 cột "Tư vấn viên" và "Người nhận data".
+    - Các cuộc gọi cách nhau (phút): Thời gian giãn cách tối thiểu giữa
+      2 lead được chia cho cùng một TVV (mặc định: 15 phút).
+    - Tần suất quét dữ liệu (giây): Chu kỳ bot tự động quét và chia data
+      (mặc định: 60 giây).
 
 B4. Cấu hình tên cột nâng cao (Click vào mục để mở rộng):
     - Nhấp chọn "Cấu hình tên cột nâng cao (Advanced Column Mapping)".
-    - Đảm bảo tên các cột nhập vào trùng khớp 100% với tên các cột trên Lark Base của bạn.
-    - **Lưu ý cực kỳ quan trọng**:
-      + Cột "Tư vấn viên (CRM)" và "Người nhận data (CRM)" phải được điền đúng tên cột.
-        Khi gán thành công, bot sẽ điền tài khoản TVV được nhận vào CẢ HAI cột này.
-      + Cột "Nhân sự / Tư vấn viên (TVV)" trong bảng TVV phải trỏ đúng tên cột kiểu
-        Thành viên (Personnel) đã liên kết tài khoản của TVV.
-      + Cột "Thời gian phân phối" (mặc định: Ngày điều chuyển) trên bảng Tiktok phải có
-        định dạng kiểu Ngày/Giờ (Date) trên Lark để bot ghi dấu thời gian phân phối lead.
+    - Đảm bảo tên các cột nhập vào trùng khớp 100% với tên cột trên Lark.
+    
+    **Lưu ý quan trọng về cột CRM**:
+      + "Người nhận data" (CRM): Phải là cột kiểu Person/User trên CRM.
+        Bot sẽ ghi tài khoản TVV được phân phối vào cột này.
+      + "Tư vấn viên" (CRM): Cột Link field liên kết đến bảng "Tỷ lệ
+        chuyển đổi". Cột này KHÔNG thể ghi qua API (Lark không hỗ trợ
+        ghi Link field 1 chiều qua API). Nếu cần tự động fill, hãy dùng
+        Lark Automation trên CRM.
+      + "Ngày điều chuyển" (CRM): Phải có định dạng kiểu Ngày/Giờ (Date)
+        trên Lark để bot ghi dấu thời gian phân phối.
+
+    **Lưu ý quan trọng về bảng Điều phối**:
+      + Cột "Nhân Sự": Text, tên TVV.
+      + Cột "Tư vấn viên": Link field nối đến bảng "Tỷ lệ chuyển đổi".
+        Bot đọc record_id từ cột này để mapping chính xác (tránh lỗi
+        trùng tên).
+      + Cột "Người nhận data": Person field, tài khoản Lark của TVV.
+        Bot sẽ lấy user_id từ cột này để ghi vào CRM.
+      + Cột "Khu vực": SingleSelect (Hà Nội / HCM).
+      + Cột checkbox ngày (ví dụ: "5/6"): Đánh dấu TVV đi làm hôm nay.
+        Bot tự detect cột checkbox có tên trùng ngày hiện tại.
 
 B5. Lưu cấu hình:
-    - Nhấn nút "Save Configuration". Hệ thống sẽ lưu thông tin cấu hình vào file `.env`
+    - Nhấn nút "Save Configuration". Hệ thống sẽ lưu vào file `.env`
       và tải lại cài đặt ngay lập tức.
-    - Nhấn "Check Connection" để kiểm tra kết nối với Lark Base. Nếu báo "Lark: Connected"
+    - Nhấn "Check Connection" để kiểm tra kết nối. Nếu báo "Lark: Connected"
       màu xanh lá cây là hệ thống đã liên kết thành công.
 
 ------------------------------------------------------------------------
 2. CÁCH HOẠT ĐỘNG & ĐIỀU KHIỂN BOT
 ------------------------------------------------------------------------
 - Start Bot (Chạy tự động):
-  + Nhấn nút "Start Bot" trên bảng điều khiển. Trạng thái sẽ chuyển sang màu xanh lá
-    "ACTIVE (Running)". Bot sẽ chạy ngầm và quét chia data tự động mỗi 60 giây.
-  
-- Stop Bot (Tạm dừng tự động):
-  + Nhấn nút "Stop Bot". Trạng thái sẽ chuyển sang màu xám "INACTIVE (Stopped)".
+  + Nhấn nút "Start Bot". Trạng thái chuyển sang "ACTIVE (Running)".
+    Bot sẽ chạy ngầm và quét chia data tự động theo chu kỳ cấu hình.
+
+- Stop Bot (Tạm dừng):
+  + Nhấn nút "Stop Bot". Trạng thái chuyển sang "INACTIVE (Stopped)".
     Bot sẽ dừng quét tự động.
 
-- Sync M0 Now (Quét và gán ngay lập tức):
-  + Nhấn nút "Sync M0 Now" để ra lệnh cho bot thực hiện quét bảng Tiktok và phân phối
-    các lead M0 chưa được gán ngay lập tức (chạy một lần duy nhất). Nút này hoạt động
-    kể cả khi Bot đang tắt (INACTIVE), hữu ích khi bạn muốn chia dữ liệu thủ công
-    hoặc chạy test nhanh.
+- Sync M0 Now (Quét và gán ngay):
+  + Nhấn nút "Sync M0 Now" để quét và phân phối lead M0 chưa gán ngay
+    lập tức (chạy một lần). Hoạt động kể cả khi Bot đang tắt (INACTIVE).
 
-- Theo dõi log hệ thống:
-  + Khu vực "Operations & Real-Time Logs" sẽ hiển thị lịch sử hoạt động chi tiết của bot
-    (tìm thấy bao nhiêu lead M0, đã gán lead nào cho TVV nào thành công, hoặc gặp lỗi gì).
+- Theo dõi log:
+  + Khu vực "Operations & Real-Time Logs" hiển thị lịch sử hoạt động
+    chi tiết (số lead tìm thấy, gán cho TVV nào, lỗi gì).
 
 ------------------------------------------------------------------------
-3. CƠ CHẾ LỰA CHỌN TVV ĐỂ GÁN LEAD
+3. CƠ CHẾ PHÂN PHỐI LEAD
 ------------------------------------------------------------------------
-Khi có một lead M0 mới cần chia, bot sẽ tìm kiếm TVV tốt nhất theo thứ tự ưu tiên:
-1. Kiểm tra TVV đi làm hôm nay: Xem trong bảng TVV cột ngày hiện tại (ví dụ: ngày 27/05)
-   TVV nào được tick chọn checkbox đi làm.
-2. Lọc theo khu vực: Ưu tiên TVV có cùng khu vực hoạt động (Team TV) với khu vực của Lead.
-3. Kiểm tra độ bận (Tránh trùng lịch gọi): TVV được chọn phải không có cuộc hẹn gọi lại
-   nào khác trong khoảng giãn cách quy định (ví dụ: cách nhau 30 phút) so với thời gian hẹn
-   gọi lại của lead mới. Nếu TVV bị trùng lịch gọi, bot sẽ ưu tiên tìm kiếm và phân phối lead
-   cho TVV khác đang rảnh trong vùng (hoặc khác vùng). Nếu tất cả TVV đều bị bận/trùng lịch,
-   bot sẽ phân phối xoay vòng lại dựa trên số lượng việc (round-robin) và giữ nguyên giờ gốc
-   khách hẹn (KHÔNG tự động lùi giờ hay sửa giờ để tránh làm mất chuông báo thức/reminder).
-4. Chia đều (Workload round-robin): Nếu có nhiều TVV thỏa mãn, bot sẽ chọn người có ít lead
-   được gán nhất trong ngày, rồi đến người lâu chưa được gán lead nhất.
-5. Chuyển vùng (Overflow): Nếu toàn bộ TVV cùng vùng đều bận hoặc không đi làm, bot sẽ chuyển
-   lead sang chia cho các TVV thuộc vùng khác đang rảnh.
+Khi có lead M0 cần phân phối, bot xử lý theo 3 chế độ:
+
+  Chế độ 1 (Round-robin): Cả "Tư vấn viên" và "Người nhận data" trống
+    → Bot chọn TVV từ bảng Điều phối theo round-robin, ghi "Người nhận
+      data" (Person) vào CRM.
+
+  Chế độ 2 (Mirror): "Tư vấn viên" đã có, "Người nhận data" trống
+    → Bot chọn TVV theo round-robin theo khu vực, ghi "Người nhận data".
+
+  Chế độ 3 (Reverse-mirror): "Người nhận data" đã có, "Tư vấn viên" trống
+    → Bot skip (không ghi Link field qua API).
+
+Tiêu chí lựa chọn TVV (theo thứ tự ưu tiên):
+  1. TVV đi làm hôm nay (checkbox ngày hiện tại được tick).
+  2. Cùng khu vực với Lead (Data khu vực).
+  3. Không bị trùng lịch hẹn gọi lại (cooldown giãn cách).
+  4. Chia đều workload (round-robin): ít lead nhất → lâu chưa nhận nhất.
+  5. Chuyển vùng (overflow): Nếu tất cả TVV cùng vùng bận, chuyển sang
+     TVV vùng khác đang rảnh.
+
+------------------------------------------------------------------------
+4. LƯU Ý QUAN TRỌNG
+------------------------------------------------------------------------
+  * Cột "Tư vấn viên" (Link field type 18, one-way SingleLink) trên CRM
+    KHÔNG thể ghi qua Lark API. Bot chỉ ghi cột "Người nhận data"
+    (Person field). Nếu muốn cột "Tư vấn viên" tự động fill theo, hãy
+    cấu hình Lark Automation trên bảng CRM.
+
+  * Bot đọc trực tiếp link_record_id từ cột "Tư vấn viên" của bảng
+    Điều phối để mapping chính xác (tránh lỗi trùng tên TVV).
+
+  * Bảng Điều phối cần được cập nhật checkbox ngày hôm nay mỗi ngày
+    trước khi bot chạy (hoặc dùng Lark Automation để tự động).
+
+  * Khi thêm/xóa TVV, cần cập nhật bảng Điều phối tương ứng.
+
+  * File `.env` chứa thông tin bí mật (App Secret). Không chia sẻ file
+    này cho người không có thẩm quyền.
+
+========================================================================
